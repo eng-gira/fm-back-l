@@ -169,7 +169,7 @@ class FundController extends Controller
             return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
     }
-    public static function setNotes(Request $request)
+    public function setNotes(Request $request)
     {
         try {
 
@@ -182,12 +182,7 @@ class FundController extends Controller
 
             $this->authorize($fund->id);
     
-            //extra validations
-            if (is_numeric($validated['size']) && $validated['size'] <= 0) {
-                throw new \Exception('Invalid size value (' . $validated['size'] . ')');
-            }
-
-            $fund->size = $validated['size'];
+            $fund->notes = $validated['notes'];
             if($fund->save()) {
                 return json_encode(['data' => $fund]);
 
