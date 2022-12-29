@@ -311,7 +311,7 @@ class FundController extends Controller
                 $addedBalance = floatval($fund->fundPercentage / 100) * floatval($validated['depositedAmount']);
     
                 $this->addToFundBalance($fund->id, $addedBalance);
-    
+                $this->logDeposit($validated['depositSource'], $fund->id, $addedBalance, isset($validated['notes']) ?? '');
             }
         }
     }
