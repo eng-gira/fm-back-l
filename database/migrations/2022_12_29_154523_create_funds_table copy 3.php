@@ -16,14 +16,14 @@ return new class extends Migration
         Schema::create('funds', function (Blueprint $table) {
             $table->id();
             $table->string('fundName');
-            $table->string('fundPercentage');
-            $table->string('balance')->default('0');
+            $table->double('fundPercentage');
+            $table->double('balance')->default(0);
             $table->string('lastDeposit')->nullable();
             $table->string('lastWithdrawal')->nullable();
             $table->text('notes')->nullable();
             $table->string('size')->default('Open');
-            $table->string('totalDeposits')->default('0');
-            $table->string('totalWithdrawals')->default('0');
+            $table->double('totalDeposits')->default(0);
+            $table->double('totalWithdrawals')->default(0);
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->timestamps();
         });

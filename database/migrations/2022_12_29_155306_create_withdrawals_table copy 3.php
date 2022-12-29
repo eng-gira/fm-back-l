@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('withdrawals', function (Blueprint $table) {
             $table->id();
-            $table->string('withdrawnAmount');
+            $table->double('withdrawnAmount');
             $table->string('withdrawnFrom');
             $table->string('withdrawalReason')->nullable();
             $table->text('notes')->nullable();
