@@ -1,4 +1,4 @@
-# funds-manager-backend
+# Funds Manager Back using Laravel
 
 ## Description
 
