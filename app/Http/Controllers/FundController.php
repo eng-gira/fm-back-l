@@ -52,7 +52,7 @@ class FundController extends Controller
         try {
 
             $validated = $request->validate([
-                'fundName' => 'required|unique:funds,fundName',
+                'fundName' => 'required',
                 'fundPercentage' => 'required', 
             ]);
             
@@ -91,7 +91,7 @@ class FundController extends Controller
         try {
 
             $validated = $request->validate([
-                'fundName' => 'required|unique:funds,fundName',
+                'fundName' => 'required',
                 'id' => 'required', 
             ]);
             
@@ -249,7 +249,20 @@ class FundController extends Controller
                 $deposits = Deposit::where('depositedTo', '=', $for)->get();
             }          
 
-            return json_encode(['data' => $deposits]);
+            $retDeposits = [];
+            foreach($deposits as $d) {
+                $dEl = [];
+                $dEl['depositedTo'] = Fund::find($d->depositedTo)->fundName;
+                $dEl['depositedAmount'] = $d->depositedAmount;
+                $dEl['id'] = $d->id;
+                $dEl['depositSource'] = $d->depositSource;
+                $dEl['created_at'] = $d->created_at;
+                $dEl['updated_at'] = $d->updated_at;
+                $dEl['notes'] = $d->notes;
+                $dEl['user_id'] = $d->user_id;
+                $retDeposits[count($retDeposits)] = $dEl;
+            }
+            return json_encode(['data' => $retDeposits]);
         }
         catch(\Exception $e) {
             return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
@@ -264,9 +277,22 @@ class FundController extends Controller
             } else {
                 $this->authorizeFundAccess(intval($for));
                 $withdrawals = Withdrawal::where('withdrawnFrom', '=', $for)->get();
-            }          
-
-            return json_encode(['data' => $withdrawals]);
+            }
+            $retWithdrawals = [];
+            foreach($withdrawals as $w) {
+                $wEl = [];
+                $wEl['withdrawnFrom'] = Fund::find($w->withdrawnFrom)->fundName;
+                $wEl['withdrawnAmount'] = $w->withdrawnAmount;
+                $wEl['id'] = $w->id;
+                $wEl['withdrawalReason'] = $w->withdrawalReason;
+                $wEl['created_at'] = $w->created_at;
+                $wEl['updated_at'] = $w->updated_at;
+                $wEl['user_id'] = $w->user_id;
+                $wEl['notes'] = $w->notes;
+                $retWithdrawals[count($retWithdrawals)] = $wEl;
+            }
+            
+            return json_encode(['data' => $retWithdrawals]);
         }
         catch(\Exception $e) {
             return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
@@ -300,7 +326,7 @@ class FundController extends Controller
         if (strval($validated['depositedTo']) != 'all') {
             // deposit to a specific fund
             $this->addToFundBalance(intval($validated['depositedTo']), $validated['depositedAmount']);
-            $this->logDeposit($validated['depositSource'], intval($validated['depositedTo']), $validated['depositedAmount'], isset($validated['notes']) ?? '');
+            $this->logDeposit($validated['depositSource'], intval($validated['depositedTo']), $validated['depositedAmount'], $validated['notes'] ?? '');
 
         } else {
             $allFunds = Fund::where('user_id', '=', auth()->user()->id)->get();
@@ -311,7 +337,7 @@ class FundController extends Controller
                 $addedBalance = floatval($fund->fundPercentage / 100) * floatval($validated['depositedAmount']);
     
                 $this->addToFundBalance($fund->id, $addedBalance);
-                $this->logDeposit($validated['depositSource'], $fund->id, $addedBalance, isset($validated['notes']) ?? '');
+                $this->logDeposit($validated['depositSource'], $fund->id, $addedBalance, $validated['notes'] ?? '');
             }
         }
     }
@@ -344,7 +370,7 @@ class FundController extends Controller
 
     private function makeWithdrawalUpdateFund($validated) {
         $this->deductFromFundBalance($validated['withdrawnFrom'], $validated['withdrawnAmount']);
-        $this->logWithdrawal($validated['withdrawnFrom'], $validated['withdrawnAmount'], isset($validated['withdrawalReason']) ?? '', isset($validated['notes']) ?? '');
+        $this->logWithdrawal($validated['withdrawnFrom'], $validated['withdrawnAmount'], $validated['withdrawalReason'] ?? '', $validated['notes'] ?? '');
     }
     private function deductFromFundBalance($fundId, $deductedAmount) {
         $fund = Fund::find($fundId);
