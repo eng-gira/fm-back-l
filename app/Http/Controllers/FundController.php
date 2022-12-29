@@ -238,24 +238,6 @@ class FundController extends Controller
         } catch(\Exception $e) {
             return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
-        
-
-        // header('Access-Control-Allow-Origin: *');
-        $data = json_decode(file_get_contents("php://input"));
-        if (!isset($data->withdrawnAmount) || !is_numeric($data->withdrawnAmount) || !isset($data->withdrawnFrom)) return false;
-
-        $withdrawalNotes = isset($data->notes) ? $data->notes : "";
-        $withdrawalReason = isset($data->withdrawalReason) ? $data->withdrawalReason : "";
-
-        $fund = Fund::find(intval($data->withdrawnFrom));
-        if($fund['userId'] != auth()->user()->id) {
-            http_response_code(403);
-            return false;
-        }
-        $result = Fund::withdraw(intval($data->withdrawnFrom), $data->withdrawnAmount, $withdrawalReason, $withdrawalNotes, auth()->user()->id);
-
-        header('Content-Type: application/json');
-        echo json_encode(["result" => $result === false ? "Failed." : $result]);
     }
 
     public static function getDepositsHistory($for)
