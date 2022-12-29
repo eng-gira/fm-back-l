@@ -154,7 +154,12 @@ class FundController extends Controller
 
             $this->authorize($fund->id);
     
-            $fund->notes = $validated['notes'];
+            //extra validations
+            if (is_numeric($validated['size']) && $validated['size'] <= 0) {
+                throw new \Exception('Invalid size value (' . $validated['size'] . ')');
+            }
+
+            $fund->size = $validated['size'];
             if($fund->save()) {
                 return json_encode(['data' => $fund]);
 
