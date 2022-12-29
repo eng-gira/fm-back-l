@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Deposit;
 use App\Models\Fund;
+use App\Models\Withdrawal;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Auth;
 
 class FundController extends Controller
@@ -219,8 +221,25 @@ class FundController extends Controller
     /**
      * Withdraw funds (POST).
      */
-    public static function withdraw()
+    public function withdraw(Request $request)
     {
+        try {
+            $validated = $request->validate([
+                'withdrawnAmount' => 'required|min:0|numeric',
+                'withdrawnFrom' => 'required|integer',
+                'withdrawalReason' => '',
+                'notes' => ''
+            ]);
+
+            $this->makeWithdrawalUpdateFund($validated);
+
+            return true;
+
+        } catch(\Exception $e) {
+            return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
+        }
+        
+
         // header('Access-Control-Allow-Origin: *');
         $data = json_decode(file_get_contents("php://input"));
         if (!isset($data->withdrawnAmount) || !is_numeric($data->withdrawnAmount) || !isset($data->withdrawnFrom)) return false;
@@ -376,7 +395,7 @@ class FundController extends Controller
         if (strval($validated['depositedTo']) != 'all') {
             // deposit to a specific fund
             $this->addToFundBalance(intval($validated['depositedTo']), $validated['depositedAmount']);
-            $this->logDeposit($validated['depositSource'], intval($validated['depositedTo']), $validated['depositedAmount'], $validated['notes'] ?? '');
+            $this->logDeposit($validated['depositSource'], intval($validated['depositedTo']), $validated['depositedAmount'], isset($validated['notes']) ?? '');
 
         } else {
             $allFunds = Fund::where('user_id', '=', auth()->user()->id)->get();
@@ -391,7 +410,6 @@ class FundController extends Controller
             }
         }
     }
-
     private function addToFundBalance($fundId, $addedAmount) {
         $fund = Fund::find($fundId);
 
@@ -417,5 +435,37 @@ class FundController extends Controller
        if($deposit->save()) return true;
        throw new \Exception('Failed to log deposit.');
 
+    }
+
+    private function makeWithdrawalUpdateFund($validated) {
+        $this->deductFromFundBalance($validated['withdrawnFrom'], $validated['withdrawnAmount']);
+        $this->logWithdrawal($validated['withdrawnFrom'], $validated['withdrawnAmount'], isset($validated['withdrawalReason']) ?? '', isset($validated['notes']) ?? '');
+    }
+    private function deductFromFundBalance($fundId, $deductedAmount) {
+        $fund = Fund::find($fundId);
+        $this->authorizeFundAccess($fund->id);
+
+        $fund->balance = floatval($fund->balance) - floatval(abs($deductedAmount));
+
+        if($fund->balance < 0) throw new \Exception('Insufficient funds.');
+
+        $fund->totalWithdrawals = floatval($fund->totalWithdrawals) + floatval(abs($deductedAmount));
+        $fund->lastWithdrawal = date("Y") . date("m") . date("d") . date("H") . date("i") . date("s");
+
+        if($fund->save()) {
+            return true;
+        } 
+        else throw new \Exception('Failed to update fund.');
+    }
+    private function logWithdrawal($withdrawnFrom, $withdrawnAmount, $withdrawalReason = '', $notes = '') {
+        $withdrawal = new Withdrawal;
+        $withdrawal->withdrawnAmount = $withdrawnAmount;
+        $withdrawal->withdrawnFrom = $withdrawnFrom;
+        $withdrawal->withdrawalReason = $withdrawalReason;
+        $withdrawal->notes = $notes;
+        $withdrawal->user_id = auth()->user()->id;
+
+        if($withdrawal->save()) return true;
+       throw new \Exception('Failed to log withdrawal.');
     }
 }
