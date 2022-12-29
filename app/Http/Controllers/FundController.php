@@ -6,8 +6,6 @@ use App\Models\Deposit;
 use App\Models\Fund;
 use App\Models\Withdrawal;
 use Illuminate\Http\Request;
-use Illuminate\Queue\Middleware\WithoutOverlapping;
-use Illuminate\Support\Facades\Auth;
 
 class FundController extends Controller
 {
