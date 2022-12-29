@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deposit;
 use App\Models\Fund;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,7 +34,7 @@ class FundController extends Controller
         try {
             $fund = Fund::find($id);
 
-            $this->authorize($id);
+            $this->authorizeFundAccess($id);
 
             return json_encode(['data' => $fund()]);
         } catch(\Exception $e) {
@@ -95,7 +96,7 @@ class FundController extends Controller
             
             $fund = Fund::find($validated['id']);
 
-            $this->authorize($fund->id);
+            $this->authorizeFundAccess($fund->id);
     
             $fund->fundName = $validated['fundName'];
             if($fund->save()) {
@@ -118,7 +119,7 @@ class FundController extends Controller
             
             $fund = Fund::find($validated['id']);
 
-            $this->authorize($fund->id);
+            $this->authorizeFundAccess($fund->id);
     
             //extra validations
             $allFunds = Fund::where('user_id', '=', auth()->user()->id)->where('id', '<>', $fund->id)->get();
@@ -152,7 +153,7 @@ class FundController extends Controller
             
             $fund = Fund::find($validated['id']);
 
-            $this->authorize($fund->id);
+            $this->authorizeFundAccess($fund->id);
     
             //extra validations
             if (is_numeric($validated['size']) && $validated['size'] <= 0) {
@@ -180,7 +181,7 @@ class FundController extends Controller
             
             $fund = Fund::find($validated['id']);
 
-            $this->authorize($fund->id);
+            $this->authorizeFundAccess($fund->id);
     
             $fund->notes = $validated['notes'];
             if($fund->save()) {
@@ -196,29 +197,23 @@ class FundController extends Controller
     /**
      * Deposit funds (POST).
      */
-    public static function deposit()
+    public function deposit(Request $request)
     {
-        // header('Access-Control-Allow-Origin: *');
-        $data = json_decode(file_get_contents("php://input"));
-        if (!isset($data->depositedAmount, $data->depositedTo, $data->depositSource) || !is_numeric($data->depositedAmount)) return false;
+        try {
+            $validated = $request->validate([
+                'depositedAmount' => 'required|min:0|numeric',
+                'depositedTo' => 'required',
+                'depositSource' => 'required',
+                'notes' => ''
+            ]);
 
-        $depositNotes = isset($data->notes) ? $data->notes : "";
-        $result = false;
-        if (strval($data->depositedTo) != "all") {
-            // deposit to a specific fund
-            $fund = Fund::find(intval($data->depositedTo));
-            if($fund['userId'] != auth()->user()->id) {
-                http_response_code(403);
-                return false;
-            }
-            $result = Fund::deposit(intval($data->depositedTo), $data->depositedAmount, $data->depositSource, $depositNotes, auth()->user()->id);
-        } else {
-            // Deposits to all funds of auth()->user()->id
-            $result = Fund::depositToAll($data->depositedAmount, $data->depositSource, $depositNotes, auth()->user()->id);
+            $this->makeDepositUpdateFund($validated);
+
+            return true;
+
+        } catch(\Exception $e) {
+            return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
-
-        header('Content-Type: application/json');
-        echo json_encode(["result" => $result === false ? "Failed." : $result]);
     }
 
     /**
@@ -378,29 +373,6 @@ class FundController extends Controller
     }
 
     /**
-     * Export the funds data (with withdrawals and deposits) in to file(s).
-     */
-    public static function export()
-    {
-
-
-        $userId = auth()->user()->id;
-
-        $funds = Fund::whereUserIdIs($userId);
-        $withdrawals = Withdrawal::whereUserIdIs($userId);
-        $deposits = Deposit::whereUserIdIs($userId);
-
-        $currentDateTime = date("Y") . "-" . date("m") . "-" . date("d") . "_" . date("H") . "-" . date("i") . "-" . date("s");
-        $fundsFileName = "funds_$currentDateTime";
-        $withdrawalsFileName = "withdrawals_$currentDateTime";
-        $depositsFileName = "deposits_$currentDateTime";
-
-        file_put_contents($fundsFileName, json_encode($funds));
-        file_put_contents($withdrawalsFileName, json_encode($withdrawals));
-        file_put_contents($depositsFileName, json_encode($deposits));
-    }
-
-    /**
      * Delete an existing fund.
      */
     public static function delete($id): void
@@ -412,9 +384,56 @@ class FundController extends Controller
         echo json_encode(["result" => $result === false ? "Failed." : "Successfully Deleted Fund."]);
     }
 
-    private function authorize($fundId) {
+    private function authorizeFundAccess($fundId) {
         $fund = Fund::find($fundId);
         if($fund && $fund->user_id == auth()->user()->id) return true;
         throw new \Exception('Forbidden');
+    }
+
+    private function makeDepositUpdateFund($validated) {
+        if (strval($validated['depositedTo']) != 'all') {
+            // deposit to a specific fund
+            $this->addToFundBalance(intval($validated['depositedTo']), $validated['depositedAmount']);
+            $this->logDeposit($validated['depositSource'], intval($validated['depositedTo']), $validated['depositedAmount'], $validated['notes'] ?? '');
+
+        } else {
+            $allFunds = Fund::where('user_id', '=', auth()->user()->id)->get();
+            if ($allFunds === false) {
+                throw new \Exception('Could not fetch funds for update.');
+            }
+            foreach ($allFunds as $fund) {
+                $addedBalance = floatval($fund->fundPercentage / 100) * floatval($validated['depositedAmount']);
+    
+                $this->addToFundBalance($fund->id, $addedBalance);
+    
+            }
+        }
+    }
+
+    private function addToFundBalance($fundId, $addedAmount) {
+        $fund = Fund::find($fundId);
+
+        $this->authorizeFundAccess($fund->id);
+
+        $fund->balance = floatval($fund->balance) + floatval(abs($addedAmount));
+        $fund->totalDeposits = floatval($fund->totalDeposits) + floatval(abs($addedAmount));
+        $fund->lastDeposit = date("Y") . date("m") . date("d") . date("H") . date("i") . date("s");
+
+        if($fund->save()) {
+            return true;
+        } 
+        else throw new \Exception('Failed to update fund.');
+    }
+    private function logDeposit($depositSource, $id, $depositedAmount, $depositNotes = '') {
+        $deposit = new Deposit;
+        $deposit->depositSource = $depositSource;
+        $deposit->depositedTo = $id;
+        $deposit->depositedAmount = $depositedAmount;
+        $deposit->user_id = auth()->user()->id;
+        $deposit->notes = $depositNotes;
+
+       if($deposit->save()) return true;
+       throw new \Exception('Failed to log deposit.');
+
     }
 }
