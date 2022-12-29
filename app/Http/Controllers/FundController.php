@@ -6,6 +6,7 @@ use App\Models\Deposit;
 use App\Models\Fund;
 use App\Models\Withdrawal;
 use Illuminate\Http\Request;
+use Illuminate\Support\Js;
 
 class FundController extends Controller
 {
@@ -36,7 +37,7 @@ class FundController extends Controller
 
             $this->authorizeFundAccess($id);
 
-            return json_encode(['data' => $fund()]);
+            return json_encode(['data' => $fund]);
         } catch(\Exception $e) {
             return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
@@ -238,56 +239,55 @@ class FundController extends Controller
         }
     }
 
-    public static function getDepositsHistory($for)
+    public function getDepositsHistory($for)
     {
-        // header('Access-Control-Allow-Origin: *');
-        if ($for == "all") {
-            $depositsHistory = Deposit::whereUserIdIs(auth()->user()->id);
-            header('Content-Type: application/json');
-            echo json_encode($depositsHistory !== false ? $depositsHistory : []);
-            return;
-        } else {
-            $fund = Fund::find(intval($for));
-            if($fund['userId'] != auth()->user()->id) {
-                http_response_code(403);
-                return false;
-            }
-            $depositsHistoryForFund = Deposit::whereFundIdIs($for);
-            header('Content-Type: application/json');
-            echo json_encode($depositsHistoryForFund !== false ? $depositsHistoryForFund : []);
-            return;
+        try {
+            if ($for == "all") {
+                $deposits = Deposit::where('user_id', '=', auth()->user()->id)->get();
+            } else {
+                $this->authorizeFundAccess(intval($for));
+                $deposits = Deposit::where('depositedTo', '=', $for)->get();
+            }          
+
+            return json_encode(['data' => $deposits]);
+        }
+        catch(\Exception $e) {
+            return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
     }
 
-    public static function getWithdrawalsHistory($for)
+    public function getWithdrawalsHistory($for)
     {
-        // header('Access-Control-Allow-Origin: *');
-        if ($for == "all") {
-            $withdrawalsHistory = Withdrawal::whereUserIdIs(auth()->user()->id);
-            header('Content-Type: application/json');
-            echo json_encode($withdrawalsHistory !== false ? $withdrawalsHistory : []);
-        } else {
-            $fund = Fund::find(intval($for));
-            if($fund['userId'] != auth()->user()->id) {
-                http_response_code(403);
-                return false;
-            }
-            $withdrawalsHistoryForFund = Withdrawal::whereFundIdIs($for);
-            header('Content-Type: application/json');
-            echo json_encode($withdrawalsHistoryForFund !== false ? $withdrawalsHistoryForFund : []);
-            return;
+        try {
+            if ($for == "all") {
+                $withdrawals = Withdrawal::where('user_id', '=', auth()->user()->id)->get();
+            } else {
+                $this->authorizeFundAccess(intval($for));
+                $withdrawals = Withdrawal::where('withdrawnFrom', '=', $for)->get();
+            }          
+
+            return json_encode(['data' => $withdrawals]);
+        }
+        catch(\Exception $e) {
+            return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
         }
     }
     /**
      * Delete an existing fund.
      */
-    public static function delete($id): void
+    public function delete($id)
     {
-        // header('Access-Control-Allow-Origin: *');
-        $result = Fund::delete($id);
+        try {
+            $this->authorizeFundAccess($id);
 
-        header('Content-Type: application/json');
-        echo json_encode(["result" => $result === false ? "Failed." : "Successfully Deleted Fund."]);
+            $fund = Fund::find($id);
+
+            if($fund->delete()) return json_encode(['data' => 'Deleted successfully.']);
+
+        } catch(\Exception $e)
+        {
+            return json_encode(['message' => 'failed', 'data' => $e->getMessage()]);
+        }
     }
 
     private function authorizeFundAccess($fundId) {
