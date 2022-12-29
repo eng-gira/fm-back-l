@@ -239,24 +239,6 @@ class FundController extends Controller
         echo json_encode(["result" => $result === false ? "Failed." : $result]);
     }
 
-    // public static function setBalance($id)
-    // {
-    // //     header('Access-Control-Allow-Origin: *');
-    //     $data = json_decode(file_get_contents("php://input"));
-    //     if (!isset($data->balance)) return false;
-    //     $result = Fund::setBalance($id, $data->balance);
-
-    //     header('Content-Type: application/json');
-    //     echo json_encode(["result" => $result === false ? "Failed." : $result]);
-    // }
-
-    /**
-     * Transfer funds (POST)
-     */
-    public static function transfer(): void
-    {
-    }
-
     public static function getDepositsHistory($for)
     {
         // header('Access-Control-Allow-Origin: *');
