@@ -1,4 +1,4 @@
-# Funds Manager Back using Laravel
+# Funds Manager API using Laravel
 
 ## Description
 
