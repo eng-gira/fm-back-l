@@ -30,7 +30,7 @@ class FundController extends Controller
 
     }
 
-    public function show($id)
+    public function readSingle($id)
     {
         try {
             $fund = Fund::find($id);
